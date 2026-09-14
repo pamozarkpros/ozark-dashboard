@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Ozark Prosthodontics | Claims Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+nav{background:#1e3a5f;padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.brand{color:#c8a96e;font-weight:700;font-size:1.1rem}
+.nr{display:flex;align-items:center;gap:1rem}
+.nu{color:#cdd5df;font-size:.85rem}
+.bo{background:transparent;border:1px solid #c8a96e;color:#c8a96e;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:.8rem}
+.br{background:#c8a96e;border:none;color:#1e3a5f;border-radius:4px;padding:4px 14px;cursor:pointer;font-size:.8rem;font-weight:700}
+#ls{min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f2f5}
+.lc{background:#fff;border-radius:12px;padding:3rem 2.5rem;box-shadow:0 4px 24px rgba(0,0,0,.1);text-align:center;max-width:400px;width:100%}
+.lc h1{color:#1e3a5f;margin-bottom:.25rem}
+.lc p{color:#666;margin-bottom:2rem;font-size:.95rem}
+.bl{background:#1e3a5f;color:#fff;border:none;border-radius:8px;padding:.75rem 2rem;font-size:1rem;cursor:pointer;width:100%;font-weight:600}
+.ln{margin-top:1rem;font-size:.8rem;color:#999}
+#as{display:none}
+main{padding:1.5rem;max-width:1400px;margin:0 auto}
+.sb{border-radius:6px;padding:.5rem 1rem;margin-bottom:1.25rem;font-size:.85rem;display:flex;align-items:center;gap:.5rem}
+.sl{background:#e8f4fd;border:1px solid #bee3f8;color:#2b6cb0}
+.se{background:#fff5f5;border:1px solid #feb2b2;color:#c53030}
+.so{background:#f0fff4;border:1px solid #9ae6b4;color:#276749}
+.sp{width:14px;height:14px;border:2px solid #bee3f8;border-top-color:#2b6cb0;border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.kr{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.kc{background:#fff;border-radius:10px;padding:1.25rem 1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.08);min-width:180px;flex:1}
+.kl{font-size:.75rem;color:#666;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.kv{font-size:1.7rem;font-weight:700;color:#1e3a5f}
+.kv.danger{color:#c0392b}
+.ks{font-size:.78rem;color:#999;margin-top:2px}
+.cc{background:#fff;border-radius:10px;padding:1.25rem 1.5rem;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:1.25rem}
+.cc h3{color:#1e3a5f;margin-bottom:1rem;font-size:1rem}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+.ft{text-align:center;color:#aaa;font-size:.78rem;padding:1.5rem 0}
+@media(max-width:700px){.cg{grid-template-columns:1fr}.kc{min-width:140px}}
+</style>
+</head>
+<body>
+<div id="ls">
+  <div class="lc">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">&#x1F9B7;</div>
+    <h1>Ozark Prosthodontics</h1>
+    <p>Claims Dashboard</p>
+    <button class="bl" id="signin-btn">Sign in with Microsoft</button>
+    <p class="ln">Use your @ozarkpros.com account</p>
+  </div>
+</div>
+<div id="as">
+  <nav>
+    <div class="brand">Ozark Prosthodontics | Claims Dashboard</div>
+    <div class="nr">
+      <span class="nu" id="nav-email"></span>
+      <button class="br" id="refresh-btn">Refresh</button>
+      <button class="bo" id="signout-btn">Sign out</button>
+    </div>
+  </nav>
+  <main>
+    <div id="status-bar" style="display:none"></div>
+    <div class="kr">
+      <div class="kc"><div class="kl">Total Outstanding</div><div class="kv" id="k1">--</div><div class="ks">All offices</div></div>
+      <div class="kc"><div class="kl">Over 60 Days</div><div class="kv danger" id="k2">--</div><div class="ks" id="k2s">-- of total</div></div>
+      <div class="kc"><div class="kl">NWA Outstanding</div><div class="kv" id="k3">--</div><div class="ks" id="k3s">--</div></div>
+      <div class="kc"><div class="kl">LR Outstanding</div><div class="kv" id="k4">--</div><div class="ks" id="k4s">--</div></div>
+    </div>
+    <div class="cc"><h3>Quarterly Trend - Outstanding Balance</h3><canvas id="ct" height="100"></canvas></div>
+    <div class="cg">
+      <div class="cc"><h3>By Doctor</h3><canvas id="cd" height="180"></canvas></div>
+      <div class="cc"><h3>By Insurance</h3><canvas id="ci" height="180"></canvas></div>
+    </div>
+    <div class="ft" id="ft"></div>
+  </main>
+</div>
+<script>
+var TID = "762dc822-17e2-44e0-8ef7-2ecedaf2671b";
+var CID = "45b52ba5-6aa6-414e-9ccb-1500df096825";
+var DID = "b!CyR2WhnJ-kO1B8Ia2yJRg6OwuZL8qqVPhMw7cnHHsltkAsRUmTFmQKMwa-erY5Qb";
+var FID = "01ODMVKL3HSHPGKO7V5VAK6MRK7A3AEMV7";
+var CH = {};
+var MSI;
+
+function initMsal() {
+  try {
+    MSI = new msal.PublicClientApplication({
+      auth: { clientId: CID, authority: "https://login.microsoftonline.com/" + TID, redirectUri: window.location.href.split("?")[0] },
+      cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+    });
+    return true;
+  } catch(e) { console.error("MSAL init:", e); return false; }
+}
+
+var LR = { scopes: ["Files.Read", "User.Read"] };
+
+function setStatus(msg, t) {
+  var b = document.getElementById("status-bar");
+  b.style.display = "flex";
+  b.className = "sb s" + (t || "l");
+  b.innerHTML = (!t || t === "l") ? "<div class=sp></div> " + msg : msg;
+}
+function clearSt() { document.getElementById("status-bar").style.display = "none"; }
+
+function fmt(v) {
+  if (v == null || isNaN(v)) return "--";
+  return "$" + Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+function pct(a, b) { return b ? Math.round((a / b) * 100) + "%" : "--"; }
+
+function exDate(val) {
+  if (!val) return null;
+  if (typeof val === "number") return new Date((val - 25569) * 86400 * 1000).getTime();
+  var d = new Date(val); return isNaN(d) ? null : d.getTime();
+}
+
+function showApp() {
+  var ac = MSI.getAllAccounts();
+  document.getElementById("ls").style.display = "none";
+  document.getElementById("as").style.display = "block";
+  if (ac.length) document.getElementById("nav-email").textContent = ac[0].username;
+}
+
+function doSignIn() {
+  MSI.loginPopup(LR).then(function() { showApp(); loadData(); })
+    .catch(function(e) { alert("Sign-in error: " + e.message); });
+}
+
+function doSignOut() { MSI.logoutPopup(); }
+
+function getToken() {
+  var ac = MSI.getAllAccounts();
+  if (!ac.length) return Promise.reject(new Error("Not signed in"));
+  return MSI.acquireTokenSilent({ scopes: LR.scopes, account: ac[0] }).then(function(r) { return r.accessToken; });
+}
+
+function readSheet(token, sheet, range) {
+  var url = "https://graph.microsoft.com/v1.0/drives/" + DID + "/items/" + FID +
+    "/workbook/worksheets/" + encodeURIComponent(sheet) + "/range(address=" + encodeURIComponent("'" + range + "'") + ")";
+  return fetch(url, { headers: { Authorization: "Bearer " + token } })
+    .then(function(r) { if (!r.ok) throw new Error(sheet + " " + r.status); return r.json(); })
+    .then(function(d) { return d.values || []; });
+}
+
+function loadData() {
+  setStatus("Loading live data from OneDrive...");
+  getToken().then(function(t) {
+    return Promise.all([readSheet(t,"NWA CLAIMS","A1:S1200"), readSheet(t,"LR CLAIMS","A1:S700"), readSheet(t,"Dashboard Feed","A1:H20")]);
+  }).then(function(r) {
+    process(r[0], r[1], r[2]);
+    setStatus("Updated " + new Date().toLocaleString(), "o");
+    document.getElementById("ft").textContent = "Last refreshed: " + new Date().toLocaleString();
+    setTimeout(clearSt, 4000);
+  }).catch(function(e) {
+    console.error(e);
+    setStatus("Showing Sep 12 snapshot. Error: " + e.message, "e");
+    fallback();
+  });
+}
+
+function process(nr, lr, fr) {
+  var h = nr[0] || [];
+  var ei=h.indexOf("EXP TO PAY"), fi=h.indexOf("FILE DATE");
+  var di=h.indexOf("DOCTOR"), ii=h.indexOf("INSURANCE");
+  var pi=h.indexOf("PAID"), li=h.indexOf("LOCATION");
+  var now = Date.now();
+  function toF(v) { return parseFloat(v) || 0; }
+  function proc(rows, def) {
+    return rows.slice(1).filter(function(r) { return toF(r[ei])>0 && !toF(r[pi]); }).map(function(r) {
+      var fd=exDate(r[fi]);
+      return { e:toF(r[ei]), o60:fd?(now-fd)/86400000>60:false, d:String(r[di]||"").trim(), i:String(r[ii]||"").trim(), l:String(r[li]||def).trim() };
+    });
+  }
+  var all=proc(nr,"NWA").concat(proc(lr,"LR"));
+  var nwa=all.filter(function(c){return c.l==="NWA";}), lrc=all.filter(function(c){return c.l==="LR";});
+  function sm(a){return a.reduce(function(s,c){return s+c.e;},0);}
+  function s60(a){return a.filter(function(c){return c.o60;}).reduce(function(s,c){return s+c.e;},0);}
+  var t=sm(all),o=s60(all),nt=sm(nwa),no=s60(nwa),lt=sm(lrc),lo=s60(lrc);
+  document.getElementById("k1").textContent=fmt(t);
+  document.getElementById("k2").textContent=fmt(o);
+  document.getElementById("k2s").textContent=pct(o,t)+" of total";
+  document.getElementById("k3").textContent=fmt(nt);
+  document.getElementById("k3s").textContent=fmt(no)+" over 60 days";
+  document.getElementById("k4").textContent=fmt(lt);
+  document.getElementById("k4s").textContent=fmt(lo)+" over 60 days";
+  function grp(key) {
+    var m={};
+    all.forEach(function(c){var k=c[key];if(!k)return;if(!m[k])m[k]={t:0,o:0};m[k].t+=c.e;if(c.o60)m[k].o+=c.e;});
+    return Object.entries(m).sort(function(a,b){return b[1].t-a[1].t;}).slice(0,10);
+  }
+  var dg=grp("d"); rBar("cd",dg.map(function(x){return x[0];}),dg.map(function(x){return x[1].t;}),dg.map(function(x){return x[1].o;}));
+  var ig=grp("i"); rBar("ci",ig.map(function(x){return x[0];}),ig.map(function(x){return x[1].t;}),ig.map(function(x){return x[1].o;}));
+  if (fr && fr.length>1) {
+    var lb=[],nv=[],lv=[],cv=[];
+    fr.forEach(function(row){
+      var lab=String(row[0]||"").trim();
+      if(!lab||lab.toLowerCase().indexOf("quarter")>=0)return;
+      var n=parseFloat(row[1])||0,l=parseFloat(row[2])||0,c=parseFloat(row[3])||0;
+      if(n+l+c===0)return;
+      lb.push(lab);nv.push(n);lv.push(l);cv.push(c||n+l);
+    });
+    if(lb.length){rTrend(lb,nv,lv,cv);return;}
+  }
+  fbTrend();
+}
+
+function rTrend(lb,nw,lr,cb) {
+  if(CH.t)CH.t.destroy();
+  CH.t=new Chart(document.getElementById("ct"),{type:"line",data:{labels:lb,datasets:[
+    {label:"Combined",data:cb,borderColor:"#1e3a5f",backgroundColor:"rgba(30,58,95,0.08)",borderWidth:2.5,tension:0.3,fill:true,pointRadius:4},
+    {label:"NWA",data:nw,borderColor:"#c8a96e",borderWidth:2,tension:0.3,pointRadius:3},
+    {label:"LR",data:lr,borderColor:"#27ae60",borderWidth:2,tension:0.3,pointRadius:3}
+  ]},options:{responsive:true,plugins:{legend:{position:"top"},tooltip:{callbacks:{label:function(c){return fmt(c.raw);}}}},
+    scales:{y:{ticks:{callback:function(v){return "$"+(v/1000).toFixed(0)+"k";}},grid:{color:"#f0f0f0"}},x:{grid:{display:false}}}}});
+}
+
+function rBar(id,lb,tot,o60) {
+  if(CH[id])CH[id].destroy();
+  CH[id]=new Chart(document.getElementById(id),{type:"bar",data:{labels:lb,datasets:[
+    {label:"Total",data:tot,backgroundColor:"#1e3a5f"},
+    {label:"Over 60",data:o60,backgroundColor:"#c0392b"}
+  ]},options:{indexAxis:"y",responsive:true,plugins:{legend:{position:"top"},tooltip:{callbacks:{label:function(c){return fmt(c.raw);}}}},
+    scales:{x:{ticks:{callback:function(v){return "$"+(v/1000).toFixed(0)+"k";}},grid:{color:"#f0f0f0"}},y:{grid:{display:false}}}}});
+}
+
+function fallback() {
+  document.getElementById("k1").textContent="$2,404,636";
+  document.getElementById("k2").textContent="$1,791,675";
+  document.getElementById("k2s").textContent="74.5% of total";
+  document.getElementById("k3").textContent="$1,514,028";
+  document.getElementById("k3s").textContent="$1,218,317 over 60 days";
+  document.getElementById("k4").textContent="$890,607";
+  document.getElementById("k4s").textContent="$573,358 over 60 days";
+  rBar("cd",["BULLOCH","VISHAJ","VAUGHAN","MCNEEL NWA","SALAZAR","SINADA","ANES LR","ANES NWA"],
+    [1053119,509105,344201,227620,135339,69000,37301,28950],[833805,233991,306866,161623,135339,69000,32501,18550]);
+  rBar("ci",["BCBS Out of State","AMBETTER","ARBCBS","AETNA","TRICARE","WEBTPA","NATIONWIDE"],
+    [1120100,839276,351018,63200,30000,940,101],[843600,772291,106544,38200,30000,940,101]);
+  fbTrend();
+  document.getElementById("ft").textContent="Showing snapshot from Sep 12, 2026";
+}
+
+function fbTrend() {
+  rTrend(["Q1 2025","Q2 2025","Q3 2025","Q4 2025","Q1 2026","Q2 2026","Q3 2026"],
+    [1800000,1500000,1900000,2000000,1200000,1500000,1514028],
+    [1097059,900871,1159051,1249416,708055,927065,890607],
+    [2897059,2400871,3059051,3249416,1908055,2427065,2404636]);
+}
+
+window.addEventListener("load", function() {
+  if (!initMsal()) { fallback(); return; }
+  document.getElementById("signin-btn").addEventListener("click", doSignIn);
+  document.getElementById("signout-btn").addEventListener("click", doSignOut);
+  document.getElementById("refresh-btn").addEventListener("click", loadData);
+  MSI.initialize().then(function() {
+    return MSI.handleRedirectPromise();
+  }).then(function() {
+    var ac = MSI.getAllAccounts();
+    if (ac.length) { showApp(); loadData(); }
+  }).catch(function(e) { console.error(e); });
+});
+</script>
+</body>
+</html>
