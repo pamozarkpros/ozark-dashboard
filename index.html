@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- legacy-js-polyfills:start - makes the SPA boot on browsers that parse modern ESM
+         but lack a few ES2021/2022 runtime METHODS (esbuild transpiles syntax, not methods).
+         Root cause of the boot-crash "e.replaceAll is not a function" (Svelte 5 runtime
+         create_fragment_from_html calls String.prototype.replaceAll, ES2021, Chrome 85+).
+         Array.prototype.at / String.prototype.at are ES2022 (Chrome 92+), 21+ uses in bundle. -->
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      (function () {
+        // String.prototype.replaceAll (ES2021). Svelte's create_fragment_from_html and our
+        // markdown/consumer-q-param code all call it. Limitation: function replacement with
+        // a plain-string search is not supported (split/join cannot replicate it), but all
+        // call sites in our codebase use string or global-RegExp replacements only.
+        if (!String.prototype.replaceAll) {
+          String.prototype.replaceAll = function (search, replacement) {
+            if (Object.prototype.toString.call(search) === "[object RegExp]") {
+              if (!search.global) {
+                throw new TypeError("replaceAll must be called with a global RegExp");
+              }
+              return this.replace(search, replacement);
+            }
+            return this.split(search).join(replacement);
+          };
+        }
+        // Array.prototype.at / String.prototype.at (ES2022). Same old-browser class,
+        // 21 uses in the app bundle - prevents the immediate follow-on crash.
+        function atImpl(len, index, get) {
+          index = Math.trunc(index) || 0;
+          if (index < 0) index += len;
+          if (index < 0 || index >= len) return undefined;
+          return get(index);
+        }
+        if (!Array.prototype.at) {
+          Object.defineProperty(Array.prototype, "at", {
+            value: function (index) {
+              var self = this;
+              return atImpl(self.length, index, function (i) { return self[i]; });
+            },
+            writable: true,
+            configurable: true,
+          });
+        }
+        if (!String.prototype.at) {
+          Object.defineProperty(String.prototype, "at", {
+            value: function (index) {
+              var self = this;
+              return atImpl(self.length, index, function (i) { return self.charAt(i); });
+            },
+            writable: true,
+            configurable: true,
+          });
+        }
+      })();
+    </script>
+    <!-- legacy-js-polyfills:end -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chipp AI | Build Brand-Native AI Agents</title>
+    <meta name="description" content="Build, brand, and sell AI agents with your knowledge. Create custom chatbots and voice agents for customer support, marketing, and lead generation." />
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://build.chipp.ai/" />
+    <meta property="og:title" content="Chipp AI | Build Brand-Native AI Agents" />
+    <meta property="og:description" content="Build, brand, and sell AI agents with your knowledge. Create custom chatbots and voice agents for customer support, marketing, and lead generation." />
+    <meta property="og:image" content="https://chipp.ai/assets/icons/chipp-logo.svg" />
+    <meta property="og:site_name" content="Chipp AI" />
+    <!-- Dub.co client-side conversion tracking (CHIPPD-1001): manual-install
+         equivalent of @dub/analytics (dub.co/docs/sdks/client-side/installation-guides/manual),
+         used because this is a plain SPA (no React/Next.js) so the framework
+         SDK component doesn't apply; the vanilla script tag is Dub's own
+         documented fallback. It detects the dub_id query param on inbound
+         conversion-enabled Dub links and stores it as a first-party cookie
+         for later attribution. Loads on every builder app route (single
+         index.html entry, client-side-routed SPA). Public, unauthenticated
+         script, no secret is ever present client-side; DUB_API_KEY is used
+         only server-side in src/services/dub.service.ts. -->
+    <!-- fetchpriority="low" (CHIPPD-1910): boot-stall-slow-network telemetry
+         showed the entry bundle still mid-download 8-20s into page load on
+         constrained connections (Android 4g, entryTimingFound false), while
+         this third-party marketing script competes for the same limited
+         bandwidth. Deprioritizing it (paired with fetchpriority="high" on
+         the entry <script type="module"> below) lets the browser's network
+         stack favor the boot-critical bundle first; conversion tracking can
+         tolerate a few extra hundred ms, a stalled splash cannot. -->
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==" src="https://www.dubcdn.com/analytics/script.js" defer fetchpriority="low"></script>
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Chipp AI | Build Brand-Native AI Agents" />
+    <meta name="twitter:description" content="Build, brand, and sell AI agents with your knowledge. Create custom chatbots and voice agents for customer support, marketing, and lead generation." />
+    <meta name="twitter:image" content="https://chipp.ai/assets/icons/chipp-logo.svg" />
+    <!-- Inline critical CSS for instant splash screen -->
+    <style nonce="aNwNN57Iujo0owBFpAdj6A==">
+      /* CSS variable defaults - Cloudflare Worker may inject overrides before this */
+      :root {
+        --app-brand-bg: #0a0a0a;
+        --app-brand-color: #F9DB00;
+      }
+      /* Full document reset before CSS bundle loads */
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow-x: hidden;
+      }
+      body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        line-height: 1;
+      }
+      /* Prevent scrollbar shift during splash */
+      html.splash-active,
+      html.splash-active body {
+        overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+      }
+      #app {
+        margin: 0;
+        padding: 0;
+      }
+      #initial-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--app-brand-bg);
+        overflow: hidden;
+      }
+      #initial-splash img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        border-radius: 16px;
+        filter: grayscale(100%) brightness(0.6);
+        opacity: 0.5;
+        mix-blend-mode: luminosity;
+        transform: scale(0.95);
+      }
+      #initial-splash.hidden {
+        display: none;
+      }
+      #splash-retry {
+        position: absolute;
+        bottom: 38%;
+        left: 0;
+        right: 0;
+        text-align: center;
+        opacity: 0;
+        animation: splashFadeIn 0.4s ease-out forwards;
+      }
+      #splash-retry p {
+        color: rgba(255,255,255,0.5);
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 14px;
+        margin-bottom: 16px;
+        line-height: 1.4;
+      }
+      #splash-retry button {
+        background: rgba(255,255,255,0.1);
+        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.15);
+        padding: 10px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      @keyframes splashFadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+    </style>
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      // Add splash-active class immediately to prevent scrollbar
+      if (document.documentElement) document.documentElement.classList.add('splash-active');
+
+      // Apply app-specific branding for consumer chat pages.
+      // This runs before components load to prevent flash of wrong colors.
+      // window.__APP_BRAND__ is injected by Cloudflare Worker for consumer routes.
+      //
+      // IMPORTANT: Branding Separation
+      // There are TWO distinct branding systems - do not conflate them:
+      //
+      // 1. --brand-color: Platform whitelabeling (agency/reseller branding)
+      //    - Set in tokens.css, overridden per-deployment
+      //    - Applies to entire platform (dashboard, login, etc.)
+      //    - NEVER set this from app brand data
+      //
+      // 2. --consumer-primary: App-specific branding (individual chatbot colors)
+      //    - Set here from window.__APP_BRAND__ injected by Worker
+      //    - Only applies in consumer chat context
+      //    - Components use var(--consumer-primary, var(--brand-color)) fallback
+      //
+      (function() {
+        var brand = window.__APP_BRAND__;
+        if (brand && brand.color) {
+          var root = document.documentElement.style;
+          // ONLY set --consumer-primary, NEVER --brand-color
+          root.setProperty('--consumer-primary', brand.color);
+        }
+        if (brand && brand.logo) {
+          var link = document.querySelector('link[rel="icon"]');
+          if (link) link.href = brand.logo;
+        }
+
+        // Platform whitelabeling: window.__TENANT_CONFIG__ is injected by
+        // Cloudflare Worker for custom domain dashboard requests.
+        // Sets --brand-color to prevent flash of default branding.
+        var tenant = window.__TENANT_CONFIG__;
+        if (tenant) {
+          var root = document.documentElement.style;
+          if (tenant.primaryColor) {
+            root.setProperty('--brand-color', tenant.primaryColor);
+          }
+          if (tenant.faviconUrl) {
+            var link = document.querySelector('link[rel="icon"]');
+            if (link) link.href = tenant.faviconUrl;
+          }
+          if (tenant.companyName) {
+            document.title = tenant.companyName;
+          }
+          // Apply custom font CSS variables (prevents FOUT on custom domains)
+          if (tenant.fontSans) {
+            root.setProperty('--font-sans', '"' + tenant.fontSans + '", -apple-system, BlinkMacSystemFont, sans-serif');
+          }
+          if (tenant.fontDisplay) {
+            root.setProperty('--font-serif', '"' + tenant.fontDisplay + '", var(--font-sans)');
+            root.setProperty('--font-display', '"' + tenant.fontDisplay + '", var(--font-sans)');
+          }
+          if (tenant.fontMono) {
+            root.setProperty('--font-mono', '"' + tenant.fontMono + '", ui-monospace, monospace');
+          }
+        }
+      })();
+    </script>
+    <!-- PWA initialization - captures beforeinstallprompt early -->
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==" src="/pwa-init.js"></script>
+    <!-- PWA meta tags - dynamically set based on context (builder or consumer app) -->
+    <meta name="theme-color" content="#F9DB00" id="theme-color-meta" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/api/pwa/manifest.json" id="manifest-link" />
+    <link rel="apple-touch-icon" href="/api/pwa/icon/180" id="apple-touch-icon" />
+    <!-- iOS splash screens: MUST be static HTML <link> tags (JS-created links are unreliable on iOS Safari) -->
+    <!-- ?v=2 cache-busts iOS splash cache so fresh installs pick up the mascot logo -->
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1320x2868?v=2" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3)" id="splash-0" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1206x2622?v=2" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3)" id="splash-1" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1290x2796?v=2" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" id="splash-2" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1284x2778?v=2" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" id="splash-3" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1179x2556?v=2" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" id="splash-4" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1170x2532?v=2" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" id="splash-5" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1125x2436?v=2" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)" id="splash-6" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/828x1792?v=2" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)" id="splash-7" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/750x1334?v=2" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" id="splash-8" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/2048x2732?v=2" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)" id="splash-9" />
+    <link rel="apple-touch-startup-image" href="/api/pwa/splash/1668x2388?v=2" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)" id="splash-10" />
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      // Update PWA manifest, icons, and splash screens for consumer app context.
+      // Builder context uses the default static tags above (already correct).
+      // Consumer context: swap hrefs to per-app dynamic endpoints.
+      //
+      // CHIPPD-1752: a hash-routed consumer link on a shared whitelabel
+      // domain (https://hub.acme.com/#/app/{slug}) never reaches the server
+      // or the Cloudflare Worker with the fragment -- the initial request is
+      // always for "/", so window.__APP_BRAND__ (host-based identification)
+      // is absent there even though the SPA later renders that exact app.
+      // Without also checking the fragment here, the browser captures the
+      // builder manifest (start_url /#/dashboard) before Add to Home Screen.
+      //
+      // Priority: URL fragment first (explicit route intent -- also covers
+      // TrialChatModal/OnboardingChatWidget's same-origin iframe at
+      // #/app/{slug}, where __APP_BRAND__ reflects the containing HQ, not
+      // the target app), then window.__APP_BRAND__ (Worker-injected for a
+      // vanity subdomain or per-app custom domain, which already identifies
+      // the app from the host), else leave the builder manifest untouched.
+      //
+      // This must run inline and synchronously (not a deferred module
+      // script) so the swap lands before the browser reads install
+      // metadata. Kept in lockstep with the tested pure implementation at
+      // web/src/lib/utils/consumer-manifest-select.ts
+      // (src/__tests__/lib/consumer_manifest_select_test.ts) -- that module
+      // also backs ConsumerLayout.svelte's post-mount re-swap, which covers
+      // client-side (hash-only) navigation between sibling apps on the same
+      // origin after this initial-load swap has already run.
+      // CHIPPD-2548: wrapped in try/catch (guarded classic-inline pattern
+      // used throughout this file, e.g. sendError / chunkDiagnostics above).
+      // window.location.hash is caller-influenced -- a Connect onboarding
+      // retry redirect can land here carrying a malformed connect_error
+      // fragment (repeated "?", stray characters). The regex/URLSearchParams
+      // calls below cannot throw on malformed input, but this guard ensures
+      // that ANY future change to this block (or an unexpected browser
+      // quirk) degrades to "skip the manifest swap" instead of throwing and
+      // leaving the rest of <head> unexecuted -- malformed query text must
+      // never block builder load.
+      (function() {
+        try {
+          var brand = window.__APP_BRAND__;
+          var fragmentMatch = /^#\/app\/([a-z0-9][a-z0-9-]*)/i.exec(window.location.hash);
+          var slug = null;
+          var launchHash = false;
+          if (fragmentMatch) {
+            slug = fragmentMatch[1];
+            launchHash = true;
+          } else if (brand && brand.slug) {
+            slug = brand.slug;
+          }
+          if (!slug) return;
+
+          var consumerBase = '/consumer/' + slug;
+          var manifestLink = document.getElementById('manifest-link');
+          if (manifestLink) {
+            manifestLink.href = consumerBase + '/manifest.json' + (launchHash ? '?launch=hash' : '');
+          }
+          var appleIcon = document.getElementById('apple-touch-icon');
+          if (appleIcon) appleIcon.href = consumerBase + '/pwa/icon/180';
+          var themeColor = document.getElementById('theme-color-meta');
+          if (themeColor && brand && brand.color) themeColor.content = brand.color;
+          // Update static splash screen links to consumer endpoints
+          for (var i = 0; i <= 10; i++) {
+            var link = document.getElementById('splash-' + i);
+            if (link) {
+              var dims = link.href.split('/splash/')[1];
+              link.href = consumerBase + '/pwa/splash/' + dims;
+            }
+          }
+        } catch (e) {
+          // Never let a malformed URL (hash, query, or otherwise) block boot.
+        }
+      })();
+    </script>
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      // ===================================================================
+      // Safari history.replaceState rate-limit guard
+      // Safari enforces a 100-calls-per-10s cap on history.replaceState /
+      // history.pushState and throws SecurityError on call 101+. Our router
+      // (svelte-spa-router's push()) is async -- the throw becomes a rejected
+      // promise that aborts navigation before window.location.hash is set.
+      // We swallow ONLY the rate-limit SecurityError so the async caller
+      // continues past the throw and the hash update still runs. All other
+      // SecurityErrors (cross-origin, unsupported URL) still propagate.
+      // Registered inline BEFORE the Dub analytics script so it sits directly
+      // on top of the native history API. Third-party scripts that wrap
+      // history.* later will wrap our wrapper, and our catch still runs.
+      // See docs/common-pitfalls.md -> "Safari history.replaceState rate limit".
+      // ===================================================================
+      (function wrapHistoryForSafariRateLimit() {
+        if (typeof history === "undefined") return;
+        var RATE_LIMIT_RE = /more than 100 times per 10 seconds/i;
+        function isRateLimit(err) {
+          return !!err &&
+            err.name === "SecurityError" &&
+            RATE_LIMIT_RE.test(String(err.message || ""));
+        }
+        ["replaceState", "pushState"].forEach(function(fn) {
+          var orig = history[fn];
+          if (typeof orig !== "function") return;
+          history[fn] = function() {
+            try {
+              return orig.apply(this, arguments);
+            } catch (err) {
+              if (isRateLimit(err)) {
+                // Safari dropped the history state save. App navigation
+                // continues via window.location.hash; the scroll-state
+                // piggyback on this call is lost but not critical.
+                return;
+              }
+              throw err;
+            }
+          };
+        });
+      })();
+    </script>
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      // ===================================================================
+      // Critical Error Bootstrap
+      // Runs inline before any JS chunks load. Handles the case where the
+      // main JS bundle fails to load (deployment race, R2 upload delay,
+      // stale service worker serving stale HTML with old chunk refs).
+      //
+      // Without this, chunk load failures are completely invisible:
+      //   - The app silently stalls on the splash screen
+      //   - No error is reported to Loki (error code is in the failed chunk)
+      //   - No auto-reload is triggered (that logic is also in the failed chunk)
+      //
+      // This script and main.ts share the same sessionStorage key for the
+      // 30s reload cooldown, so they cannot double-reload each other.
+      // ===================================================================
+      (function() {
+        var CHUNK_RELOAD_KEY = "chipp-chunk-reload";
+        var CHUNK_RELOAD_COOLDOWN_MS = 30000;
+        var ERROR_ENDPOINT = "/api/client-errors";
+
+        // Stores the last pre-boot error so the stall beacon can include it.
+        window.__chippBootError = null;
+        // Boot stage set by main.ts and App.svelte for stall diagnostics.
+        // undefined -> entry module not yet evaluated
+        // "entry-evaluated" -> main.ts started, IIFEs running
+        // "mounted" -> mount() returned, Svelte initializing
+        // "app-booted" -> App.svelte onMount ran, splash cleared
+        window.__chippBootStage = window.__chippBootStage || undefined;
+
+        // CHIPPD-2481: detect browsers that cannot execute <script type="module">
+        // AT ALL (Chrome <61, Safari <10.1, Firefox <60 -- includes legacy in-app
+        // WebViews such as the Android System WebView shipped with Chrome 55 seen
+        // in production boot-stall telemetry). These devices still fetch the entry
+        // bundle (module preload/prefetch happens independently of execution
+        // support) but the module script can never run -- this is exactly the
+        // `boot-stall-downloaded-not-executed` population in categorize.ts, and NO
+        // amount of waiting or reloading fixes it: the browser itself lacks the
+        // capability. Detected via the standard nomodule/module feature test
+        // (`noModule` exists on script elements only in browsers implementing the
+        // HTML module-script spec) -- synchronous, no network round trip needed.
+        // The splash-timeout watchdog in <body> reads this to skip the 8s wait and
+        // show an honest "update your browser" message instead of a useless
+        // "Tap to reload" button for this specific, unrecoverable population.
+        try {
+          window.__chippModuleUnsupported = !("noModule" in document.createElement("script"));
+        } catch (eModuleDetect) {
+          window.__chippModuleUnsupported = false;
+        }
+
+        // Reload the page once per 30 seconds to recover from chunk errors.
+        // Uses the same sessionStorage key as main.ts -- if main.ts already
+        // reloaded, the inline handler won't double-reload.
+        function tryChunkReload(source) {
+          try {
+            var last = parseInt(sessionStorage.getItem(CHUNK_RELOAD_KEY) || "0", 10);
+            if (Date.now() - last > CHUNK_RELOAD_COOLDOWN_MS) {
+              sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
+              console.warn("[Chipp] " + source + " failed, reloading for new deployment...");
+              location.reload();
+            }
+          } catch (e) {
+            // sessionStorage unavailable (storage-partitioned/sandboxed
+            // iframe, private browsing). An unconditional reload here loops
+            // FOREVER on a persistent chunk failure (each generation fires a
+            // beacon, bounded only by the server rate limiter). Bound it to
+            // ONE reload per page generation via a URL marker instead.
+            // Kept in lockstep with main.ts tryChunkReload + share.html.
+            try {
+              if (location.search.indexOf("chipp_cr=1") === -1) {
+                var sep = location.search ? "&" : "?";
+                location.replace(
+                  location.pathname + location.search + sep + "chipp_cr=1" + location.hash
+                );
+              }
+            } catch (e2) { /* give up quietly */ }
+          }
+        }
+
+        // Send a minimal error report to Loki without depending on any JS chunk.
+        // tags.source routes to the correct categorize.ts classification:
+        //   "chunk_load_error" -> warn (chunk-load)
+        //   "boot_error" / "boot_exception" -> log.error (boot-path)
+        //   "boot_stall" -> log.error only when extra.bootStage shows our code
+        //      ran (post-mount hang); else warn (module never evaluated / slow net)
+        // extra.handler = "inline-bootstrap" distinguishes these entries in Loki queries.
+        function sendError(name, message, source, extraData, stack) {
+          try {
+            var errObj = {
+              name: name || "ChunkLoadError",
+              message: String(message || "unknown error").slice(0, 2000),
+              url: location.href,
+              timestamp: new Date().toISOString(),
+              tags: { source: source || "chunk_load_error" },
+              extra: Object.assign({ handler: "inline-bootstrap" }, extraData || {})
+            };
+            if (stack) errObj.stack = String(stack).slice(0, 2000);
+            var body = JSON.stringify({ errors: [errObj] });
+            if (navigator.sendBeacon) {
+              navigator.sendBeacon(ERROR_ENDPOINT, new Blob([body], { type: "application/json" }));
+            } else {
+              fetch(ERROR_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: body,
+                keepalive: true
+              }).catch(function() {});
+            }
+          } catch (e) {
+            // Error reporting must never throw
+          }
+        }
+
+        // Expose for the body splash-timeout watchdog: sendError is scoped to
+        // this IIFE, and the watchdog lives in a SEPARATE <script> block in
+        // <body>. Without this assignment its `typeof` guard silently resolves
+        // null and the boot_stall beacon never fires (the frozen-splash class
+        // becomes invisible in Loki). Regression-guarded by
+        // src/__tests__/web/boot_stall_beacon_wiring_test.ts.
+        window.__chippSendError = sendError;
+
+        // True once the app's own error handling is live. Two signals, in
+        // trust order:
+        //   1. __chippClientErrorsReady -- ErrorBoundary.svelte attached its
+        //      window handlers (set in its onMount; ErrorBoundary is the
+        //      unconditional top-level wrapper in App.svelte, and its onMount
+        //      fires before App.svelte's). This closes the former dead zone
+        //      between Svelte's first render and ErrorBoundary attaching:
+        //      the old "#app has children" check flipped this off at first
+        //      DOM insertion, so a synchronous error thrown mid-mount (e.g.
+        //      in a child component's onMount) was reported by NEITHER layer.
+        //   2. __chippBootStage === "app-booted" -- App.svelte finished boot.
+        //
+        // Deliberately NO "#app has children" fallback: index.html and its
+        // main bundle ship as one build (hashed refs), so a bundle that
+        // renders children but never sets either flag cannot pair with this
+        // file -- and keeping the fallback would re-open the mid-mount dead
+        // zone it used to cause.
+        function appHasBooted() {
+          if (window.__chippClientErrorsReady) return true;
+          return window.__chippBootStage === "app-booted";
+        }
+
+        // Diagnostics for chunk-load beacons: which asset failed, was it the
+        // boot-blocking entry doc (assets/main-*.js / assets/share-*.js --
+        // every visitor mid-load is stuck, urgent) or a lazy dynamic-import
+        // route chunk (normal, self-healing deploy churn), and (best-effort)
+        // what HTTP status the browser saw. Mirrors the pure, unit-tested
+        // implementation in web/src/lib/utils/chunk-diagnostics.ts -- kept as
+        // plain ES5 here because this runs before any module can be imported.
+        var ENTRY_CHUNK_RE = /^(?:main|share)-[A-Za-z0-9_-]{8}\.js$/;
+        var ENTRY_CHUNK_LEGACY_RE = /^(?:main|share)\.[a-f0-9]{8}\.js$/;
+        function chunkBasename(pathOrUrl) {
+          var noQuery = String(pathOrUrl || "").split(/[?#]/)[0];
+          var parts = noQuery.split("/");
+          return parts[parts.length - 1] || noQuery;
+        }
+        function chunkDiagnostics(assetUrl) {
+          var diag = {};
+          if (!assetUrl) return diag;
+          var base = chunkBasename(assetUrl);
+          diag.chunkKind = (ENTRY_CHUNK_RE.test(base) || ENTRY_CHUNK_LEGACY_RE.test(base))
+            ? "entry"
+            : "dynamic";
+          try {
+            if (typeof performance !== "undefined" && typeof performance.getEntriesByName === "function") {
+              var entries = performance.getEntriesByName(assetUrl);
+              var status = entries[0] && entries[0].responseStatus;
+              if (typeof status === "number" && status > 0) diag.httpStatus = status;
+            }
+          } catch (e) { /* Resource Timing L2 unsupported -- status stays unknown */ }
+          return diag;
+        }
+
+        // Handle Vite module preload errors (<link rel="modulepreload"> failures).
+        // iOS Safari fires vite:preloadError but NOT unhandledrejection for
+        // preload failures, so this handler is critical for that browser.
+        // Registering in <head> before the entry module ensures it fires even
+        // if main.ts never boots.
+        //
+        // CHIPPD-2205: main.ts registers its OWN "vite:preloadError" listener
+        // (with richer telemetry -- outcome/releaseId/deployId via
+        // buildChunkFailureTelemetry) once it evaluates, and window listeners
+        // accumulate rather than replace -- so once main.ts is live, BOTH
+        // listeners fire for the SAME browser event and every preload failure
+        // is reported to Loki TWICE (confirmed in production: fingerprints
+        // db1534d3.../be99303b... were one single client failure logged as
+        // two separate chunk-load warnings 4ms apart). window.__chippBootStage
+        // is set as the first statement of main.ts's module body, so by the
+        // time any (necessarily async) preload-rejection event fires,
+        // its truthiness reliably means main.ts's own listener is already
+        // registered too. Skip THIS beacon in that case -- it is strictly
+        // redundant with main.ts's report -- but still attempt the reload:
+        // it is idempotent via the shared cooldown key, and stays as a
+        // defense-in-depth fallback if main.ts's own handler ever fails to
+        // run.
+        window.addEventListener("vite:preloadError", function(event) {
+          event.preventDefault();
+          var src = (event.payload && event.payload.src) || "unknown";
+          if (!window.__chippBootStage) {
+            sendError("ChunkLoadError", "Importing a module script failed: " + src, "chunk_load_error",
+              Object.assign({ event: "vite:preloadError", assetUrl: src }, chunkDiagnostics(src)));
+          }
+          tryChunkReload("Module preload");
+        });
+
+        // Handle <script type="module"> and <link> element load failures AND
+        // pre-boot synchronous runtime errors.
+        //
+        // SCRIPT/LINK branch: fires when the entry chunk (assets/main-[hash].js)
+        // returns 404 -- e.g. during the R2 upload race after a deploy.
+        //
+        // Window-level (no tagName) branch: fires when a synchronous error occurs
+        // BEFORE the app boots (TDZ, circular import, SecurityError from
+        // history.replaceState in a storage-partitioned third-party iframe).
+        // These events have event.target === window (no tagName) and were
+        // previously silently dropped by the early "if (!target.tagName) return".
+        // Must use capture phase because load errors do not bubble.
+        // Registered before the entry <script type="module"> is parsed in <body>.
+        window.addEventListener("error", function(event) {
+          var target = event.target;
+
+          // Window-level synchronous error (no element target) -- pre-boot throw.
+          // This catches SecurityError from history.replaceState / sessionStorage in
+          // storage-partitioned iframes, TDZ errors from circular imports, and other
+          // module-eval throws that fire before the app's own error handling is live.
+          if (!target || !target.tagName) {
+            // Only report if the app has not yet booted -- post-boot window errors
+            // are handled by the app's own handlers (main.ts unhandledrejection +
+            // ErrorBoundary.svelte's window.onerror), which are live once booted.
+            if (!appHasBooted()) {
+              var errMsg = event.message || "unknown pre-boot error";
+              var errName = (event.error && event.error.name) || "Error";
+              window.__chippBootError = { name: errName, message: errMsg };
+              sendError(errName, errMsg, "boot_error", {
+                event: "pre-boot-window-error",
+                bootStage: window.__chippBootStage,
+                filename: event.filename || "",
+                lineno: event.lineno || 0,
+                colno: event.colno || 0
+              }, event.error && event.error.stack);
+
+              // CHIPPD-2616: the entry bundle always contains static
+              // top-level import/export (Vite's chunk boundaries), which is
+              // ONLY legal when the script is parsed as a module. If some
+              // environment anomaly (extension/proxy stripping the `type`
+              // attribute, a corrupted mid-transfer response) makes the
+              // browser parse it as a classic script instead, every engine
+              // throws a distinct SyntaxError at the first import/export
+              // token. index.html is served no-cache/no-store, so a fresh
+              // reload re-fetches a correct <script type="module"> tag and
+              // resolves a transient case. Bounded by the SAME cooldown key
+              // chunk-load recovery uses, so a repeat within 30s does NOT
+              // reload again. Mirrored in web/src/lib/utils/module-parse-error.ts
+              // (isModuleParsedAsClassicScriptError) and web/share.html.
+              if (/expected expression, got keyword 'import'|Cannot use import statement outside a module|Unexpected keyword 'import'|Unexpected keyword 'export'|Unexpected token 'import'|Unexpected token 'export'|import declarations may only appear at top level of a module|export declarations may only appear at top level of a module/i.test(errMsg)) {
+                tryChunkReload("Entry module parsed as classic script");
+              }
+            }
+            return;
+          }
+
+          // SCRIPT/LINK element: hashed asset chunk fetch failure.
+          var tag = target.tagName.toUpperCase();
+          if (tag !== "SCRIPT" && tag !== "LINK") return;
+          var src = target.src || target.href || "";
+          // Only handle our own hashed asset chunks (/assets/...).
+          // Skip third-party CDN scripts, pwa-init.js, /api/ endpoints, etc.
+          if (src.indexOf("/assets/") === -1) return;
+          var shortSrc = src.split("/assets/").pop() || src;
+          sendError("ChunkLoadError", "Failed to fetch dynamically imported module: " + shortSrc, "chunk_load_error",
+            Object.assign({ event: "asset-load-error", src: shortSrc, assetUrl: src }, chunkDiagnostics(src)));
+          tryChunkReload("Entry chunk load error");
+        }, true); // capture phase required for element load errors
+
+        // Handle dynamic import failures via unhandledrejection.
+        // Covers lazy route chunks failing after main.ts boots, and also covers
+        // the case where main.ts failed to boot so its own handler never ran.
+        // The shared cooldown key prevents double-reloads when both handlers fire.
+        window.addEventListener("unhandledrejection", function(event) {
+          var msg = String((event.reason && event.reason.message) || event.reason || "");
+          if (
+            msg.indexOf("Failed to fetch dynamically imported module") !== -1 ||
+            msg.indexOf("Importing a module script failed") !== -1 ||
+            msg.indexOf("error loading dynamically imported module") !== -1
+          ) {
+            // The rejection message is a fixed-format string Vite generates
+            // (never free-form user content) -- extracting the trailing URL
+            // is plain structural parsing, not natural-language inference.
+            var urlMatch = msg.match(/https?:\/\/\S+|\/assets\/\S+/);
+            var assetUrl = urlMatch ? urlMatch[0].replace(/[)\].,;:'"]+$/, "") : null;
+            sendError("ChunkLoadError", msg.slice(0, 500), "chunk_load_error",
+              Object.assign({ event: "unhandledrejection", assetUrl: assetUrl }, chunkDiagnostics(assetUrl)));
+            tryChunkReload("Dynamic import");
+          }
+        });
+      })();
+    </script>
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==" type="module" crossorigin src="/assets/main-ykl9x0lN.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/svelte-1cIiACzi.js">
+    <link rel="modulepreload" crossorigin href="/assets/legacy-0u1ghzFG.js">
+    <link rel="modulepreload" crossorigin href="/assets/fetch-retry-BE1bxnbE.js">
+    <link rel="modulepreload" crossorigin href="/assets/CTABadge-DUsiq4y_.js">
+    <link rel="modulepreload" crossorigin href="/assets/voice-recorder-40DOMoIM.js">
+    <link rel="stylesheet" crossorigin href="/assets/CTABadge-BRWO-Sqf.css">
+    <link rel="stylesheet" crossorigin href="/assets/main-uv9AKYQG.css">
+  </head>
+  <body>
+    <!-- Instant splash screen - shows before JS loads -->
+    <div id="initial-splash">
+      <img src="/assets/chippylogo.svg" alt="Loading" onerror="this.style.display='none'" />
+    </div>
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      window.__splashTimeout = setTimeout(function() {
+        var splash = document.getElementById('initial-splash');
+        if (splash && splash.style.display !== 'none') {
+          // Fire the boot-stall beacon unconditionally when the splash is still
+          // visible at the timeout. A successful boot calls cancelSplashRecoveryTimeout()
+          // (via App.svelte's hideInitialSplash) BEFORE this timeout can fire, so
+          // reaching here with the splash visible is ALWAYS anomalous: the app either
+          // never evaluated its entry module, hung during a pre-mount IIFE, or mounted
+          // but stalled before onMount cleared the splash. We do NOT gate on whether
+          // Svelte rendered into #app -- that would suppress the beacon for the
+          // mounted-but-hung frozen-splash case (children present, boot never finished),
+          // which is exactly the failure this beacon exists to surface. The bootStage
+          // extra pinpoints where it froze (undefined / entry-evaluated / mounted).
+          var lastErr = window.__chippBootError;
+          // sendError lives inside the head bootstrap IIFE; the ONLY way to
+          // reach it from this separate script block is the explicit
+          // window.__chippSendError export. Guarding on the bare identifier
+          // always resolves "undefined" here (this bug shipped: the beacon
+          // was dead code until 2026-07-07).
+          var sendFn = typeof window.__chippSendError === 'function' ? window.__chippSendError : null;
+          if (sendFn) {
+            // Collect resource-timing diagnostics so the server can distinguish
+            // "entry bundle still downloading on a slow network" (environmental,
+            // self-resolving) from "bundle loaded but app hung" (real bug).
+            // Every access is wrapped in try/catch -- a throw must never prevent
+            // the beacon or the "Tap to reload" UI from firing.
+            var diag = {};
+            try {
+              diag.documentReadyState = document.readyState;
+              diag.elapsedMs = Math.round(performance.now());
+              var perfOk = typeof performance !== 'undefined' &&
+                           typeof performance.getEntriesByType === 'function' &&
+                           typeof performance.getEntriesByName === 'function';
+              diag.perfSupported = perfOk;
+
+              // Locate the entry <script type="module"> element.
+              var entryEl = null;
+              try {
+                var scripts = document.querySelectorAll('script[type="module"][src]');
+                for (var si = 0; si < scripts.length; si++) {
+                  var s = scripts[si];
+                  var src = s.src || '';
+                  if (src.indexOf('/assets/') !== -1 || src.indexOf('/src/main') !== -1) {
+                    entryEl = s;
+                    break;
+                  }
+                }
+                if (!entryEl && scripts.length > 0) { entryEl = scripts[0]; }
+              } catch (e2) {}
+
+              diag.entrySrcFound = !!(entryEl && entryEl.src);
+              if (diag.entrySrcFound) {
+                diag.entrySrc = entryEl.src.split('/assets/').pop().slice(0, 80);
+              }
+
+              // The DISCRIMINATOR: does the entry chunk have a resource timing
+              // entry? If perfSupported + entrySrcFound + NO timing entry, the
+              // browser never finished downloading the bundle -- slow network,
+              // not a code bug. If the entry IS in timing, it loaded but the
+              // app hung (real bug).
+              if (perfOk && diag.entrySrcFound) {
+                try {
+                  var entries = performance.getEntriesByName(entryEl.src);
+                  diag.entryTimingFound = entries.length > 0;
+                  if (diag.entryTimingFound) {
+                    var t = entries[0];
+                    diag.entryResponseEnd = Math.round(t.responseEnd || 0);
+                    diag.entryDurationMs = Math.round(t.duration || 0);
+                    diag.entryTransferSize = t.transferSize || 0;
+                  }
+                } catch (e3) {}
+              } else if (perfOk && !diag.entrySrcFound) {
+                diag.entryTimingFound = false;
+              }
+
+              // Count how many /assets/ chunks have already finished loading.
+              if (perfOk) {
+                try {
+                  var resources = performance.getEntriesByType('resource');
+                  var finishedAssets = 0;
+                  for (var ri = 0; ri < resources.length; ri++) {
+                    if (resources[ri].name && resources[ri].name.indexOf('/assets/') !== -1) {
+                      finishedAssets++;
+                    }
+                  }
+                  diag.finishedAssetChunks = finishedAssets;
+                } catch (e4) {}
+              }
+
+              // Connection info (Chromium-only, guarded).
+              try {
+                var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn) {
+                  diag.effectiveType = conn.effectiveType;
+                  diag.downlink = conn.downlink;
+                  diag.rtt = conn.rtt;
+                  diag.saveData = conn.saveData;
+                }
+              } catch (e5) {}
+            } catch (e1) {}
+
+            sendFn(
+              (lastErr && lastErr.name) || "BootStall",
+              (lastErr && lastErr.message) || "splash visible after 8s -- app did not boot",
+              "boot_stall",
+              Object.assign(
+                { event: "splash-timeout", bootStage: window.__chippBootStage, userAgent: navigator.userAgent.slice(0, 200) },
+                diag
+              )
+            );
+          }
+
+          // Show a "stuck splash" UI alongside the beacon (additive, not
+          // replacing). The copy is picked from the SAME discriminator the
+          // server uses (isSlowNetworkBootStall in categorize.ts): when the
+          // entry bundle positively has NOT finished downloading yet, telling
+          // the user their connection looks slow (and that waiting may still
+          // work) is more honest than "reload" -- a reload restarts the same
+          // download on the same connection and can look like a broken retry
+          // loop. Any other/ambiguous signal keeps the original generic copy.
+          var isSlowNetwork = !!(diag && diag.perfSupported === true &&
+            diag.entrySrcFound === true &&
+            diag.entryTimingFound === false);
+
+          function showStuckSplashUI() {
+            var container = document.createElement('div');
+            container.id = 'splash-retry';
+            var msg = document.createElement('p');
+            msg.textContent = isSlowNetwork
+              ? 'Still loading\u2026 your connection looks slow. You can keep waiting, or reload to try again.'
+              : 'Taking longer than expected\u2026';
+            var btn = document.createElement('button');
+            btn.textContent = 'Tap to reload';
+            btn.onclick = function() { location.reload(); };
+            container.appendChild(msg);
+            container.appendChild(btn);
+            splash.appendChild(container);
+          }
+
+          if (isSlowNetwork) {
+            // CHIPPD-2481 (C4): a CONFIRMED still-downloading connection
+            // deserves real extra time, not just softer copy -- the entry
+            // bundle genuinely has not arrived yet at 8s, so nagging the user
+            // to reload immediately just restarts the identical download on
+            // the identical connection. Give it SLOW_NETWORK_GRACE_MS more
+            // before showing the "Tap to reload" UI. If the app boots during
+            // that window, App.svelte's hideInitialSplash() hides the splash
+            // (style.display becomes 'none'), so the re-check below skips the
+            // UI entirely -- the user never even sees the nag. The beacon
+            // above already fired unconditionally at 8s, so the self-healing
+            // signal timing is unaffected; only the USER-FACING nag is
+            // delayed.
+            var SLOW_NETWORK_GRACE_MS = 8000;
+            setTimeout(function() {
+              if (splash && splash.style.display !== 'none') {
+                showStuckSplashUI();
+              }
+            }, SLOW_NETWORK_GRACE_MS);
+          } else {
+            showStuckSplashUI();
+          }
+        }
+      }, 8000);
+
+      // CHIPPD-2481: a browser that cannot execute <script type="module"> at all
+      // (window.__chippModuleUnsupported, set synchronously in the head bootstrap)
+      // will NEVER boot no matter how long the splash waits or how many times the
+      // user reloads -- so cancel the 8s watchdog above immediately for this
+      // population and show an honest "update your browser" message right away.
+      // A "Tap to reload" button here would be dishonest: reloading re-runs the
+      // exact same unsupported code path and fails the same way every time.
+      (function() {
+        if (!window.__chippModuleUnsupported) return;
+        clearTimeout(window.__splashTimeout);
+        window.__splashTimeout = null;
+
+        var splash = document.getElementById('initial-splash');
+        if (!splash) return;
+
+        var sendFn = typeof window.__chippSendError === 'function' ? window.__chippSendError : null;
+        if (sendFn) {
+          sendFn(
+            "BootStall",
+            // CHIPPD-2540: the literal substring "<script" must never appear
+            // contiguously inside a JS string literal in this file. A
+            // regex-based HTML transformer that injects a CSP nonce into
+            // every "<script ...>" occurrence (without true tag-boundary
+            // awareness) can mistake this diagnostic text for a real
+            // opening tag, splice `nonce="..."` into the middle of the
+            // string, and terminate it early -- corrupting the rest of this
+            // statement into a SyntaxError before the app can even boot.
+            // `injectNonceIntoHtml` (cloudflare-worker/src/security-headers.ts)
+            // is already tag-boundary-aware and does not have this defect,
+            // but this message doubles as the guarantee: the substring
+            // itself does not exist, so no present or future regex-based
+            // transformer can trip over it. Splitting the concatenation
+            // preserves the exact rendered/reported string.
+            "browser cannot execute <" + "script type=\"module\"> -- app cannot boot",
+            "boot_stall",
+            {
+              event: "module-unsupported",
+              bootStage: window.__chippBootStage,
+              userAgent: navigator.userAgent.slice(0, 200),
+              unsupportedBrowser: true
+            }
+          );
+        }
+
+        var container = document.createElement('div');
+        container.id = 'splash-retry';
+        var msg = document.createElement('p');
+        msg.textContent = 'This browser is too old to run this app. Please update your browser, or try a different one.';
+        container.appendChild(msg);
+        splash.appendChild(container);
+      })();
+    </script>
+    <div id="app"></div>
+    <!-- Polyfill: Array/String.prototype.at (ES2022) — marked 16.x/17.x uses
+         .at() in its tokenizer; older browsers (Safari <15.4, Chrome <92,
+         Samsung Internet <16) lack it and throw "t.at is not a function". -->
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      if(!Array.prototype.at){Array.prototype.at=function(n){n=Math.trunc(n)||0;if(n<0)n+=this.length;return(n<0||n>=this.length)?undefined:this[n]};}
+      if(!String.prototype.at){String.prototype.at=function(n){n=Math.trunc(n)||0;if(n<0)n+=this.length;return(n<0||n>=this.length)?undefined:this[n]};}
+    </script>
+    <!-- Polyfill: String.prototype.replaceAll (ES2021): Svelte 5 runtime and
+         app code call replaceAll; older browsers/webviews (Safari <13.1,
+         Chrome <85) lack it and the whole SPA white-screens on boot.
+         See ticket d6ea9b5e. -->
+    <script nonce="aNwNN57Iujo0owBFpAdj6A==">
+      if(!String.prototype.replaceAll){Object.defineProperty(String.prototype,"replaceAll",{configurable:true,writable:true,enumerable:false,value:function(search,replacement){if(Object.prototype.toString.call(search)==="[object RegExp]"){if(!search.global){throw new TypeError("String.prototype.replaceAll called with a non-global RegExp argument");}return String.prototype.replace.call(this,search,replacement);}var escaped=String(search).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");return String.prototype.replace.call(this,new RegExp(escaped,"g"),replacement);}});}
+    </script>
+    <!-- fetchpriority="high" (CHIPPD-1910): pairs with the dubcdn
+         fetchpriority="low" above. Boot-stall-slow-network samples showed
+         finishedAssetChunks > 0 with entryTimingFound still false at the 8s
+         watchdog -- other requests were finishing while the entry bundle
+         itself had not, on the same slow connection. Explicitly marking the
+         entry module as high priority is a standards-based hint (Chrome,
+         Firefox 102+, Safari 17.2+; a no-op elsewhere) that the browser's
+         network stack should favor this fetch over lower-priority ones. -->
+  </body>
+</html>
